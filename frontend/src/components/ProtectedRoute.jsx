@@ -8,38 +8,38 @@ export default function ProtectedRoute({ children }) {
     const [token, setToken] = useState(localStorage.getItem('token'));
     const [isExpired, setIsExpired] = useState(false);
 
-    // Logout handler
+    // ログアウト処理
     const handleLogout = (reason) => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setIsExpired(true);
     };
 
-    // Idle timer hooks
-    // Settings: 30 minutes = 1800000 ms
-    // If user is idle for 30 minutes, auto logout
+    // アイドルタイマー設定
+    // 設定値：30分 = 1,800,000ms
+    // 一定時間操作がない場合、自動的にログアウト
     useIdleTimer(1800000, () => {
-        handleLogout("You have been logged out due to inactivity.");
+        handleLogout("一定時間操作がなかったため、ログアウトされました。");
     });
 
-    // Verify token health on mount and set interval to check periodically
+    // 初回マウント時および定期的にトークンの状態を確認
     useEffect(() => {
         if (!token) return;
 
-        // Verify token health function
+        // トークン状態確認処理
         const checkTokenHealth = async () => {
             try {
                 const decoded = jwtDecode(token);
                 const currentTime = Date.now() / 1000;
                 const timeLeft = decoded.exp - currentTime;
 
-                // Token expired case
+                // トークンの有効期限切れ
                 if (timeLeft <= 0) {
-                    handleLogout("Token expired.");
+                    handleLogout("トークンの有効期限が切れました。");
                     return;
                 }
 
-                // If token is about to expire in the next 5 minutes, refresh it
+                // 有効期限が5分未満の場合、トークンを更新
                 if (timeLeft < 300) {
                     try {
                         const res = await refreshToken();
@@ -48,23 +48,24 @@ export default function ProtectedRoute({ children }) {
                         localStorage.setItem('token', newToken);
                         setToken(newToken);
                     } catch (err) {
-                        console.error("Error refreshing token:", err);
-                        handleLogout("Cannot refresh token.");
+                        console.error("トークン更新中にエラーが発生しました:", err);
+                        handleLogout("トークンを更新できませんでした。");
                     }
                 }
             } catch (error) {
-                handleLogout("Token is invalid.");
+                handleLogout("無効なトークンです。");
             }
         };
 
         checkTokenHealth();
 
-        // Interval Setting: A check every 1 minute
+        // 定期チェック：1分ごとに実行
         const intervalId = setInterval(checkTokenHealth, 60000);
 
         return () => clearInterval(intervalId);
     }, [token]);
 
+    // 未認証または期限切れの場合、ログイン画面へリダイレクト
     if (!localStorage.getItem('token') || isExpired) {
         return <Navigate to="/login" replace />;
     }

@@ -43,7 +43,7 @@ export default function MessageDialog({ isOpen, onClose, title, message, type = 
                     onClick={onClose}
                     className={`w-full py-2 px-4 text-white font-bold rounded transition ${currentConfig.btnColor}`}
                 >
-                    CLOSE
+                    閉じる
                 </button>
 
             </div>

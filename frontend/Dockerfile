@@ -1,23 +1,23 @@
 # frontend/Dockerfile
 
-# 1. Chọn Node image nhẹ
+# 1. 軽量な Node.js イメージを使用
 FROM node:22-alpine
 
-# 2. Thiết lập thư mục làm việc
+# 2. 作業ディレクトリを設定
 WORKDIR /app
 
-# 3. Copy package.json để cài thư viện
+# 3. 依存関係インストール用に package.json を先にコピー
 COPY package.json package-lock.json* ./
 
-# 4. Cài đặt dependencies
+# 4. 依存ライブラリをインストール
 RUN npm install
 
-# 5. Copy toàn bộ code Frontend
+# 5. フロントエンドの全コードをコンテナにコピー
 COPY . .
 
-# 6. Mở port 5173 (Port mặc định của Vite)
+# 6. Vite のデフォルトポート（5173）を公開
 EXPOSE 5173
 
-# 7. Lệnh chạy dev server
-# Lưu ý: --host là bắt buộc để truy cập từ trình duyệt máy thật
+# 7. 開発サーバー起動コマンド
+# ※ --host を指定することで、ホストマシンのブラウザからアクセス可能
 CMD ["npm", "run", "dev", "--", "--host"]

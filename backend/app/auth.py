@@ -16,29 +16,36 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def verify_password(plain_password, hashed_password):
     """
-    Verify password
-    
-    :param plain_password - str: user's input password
-    :param hashed_password - str: db stored hashed password
-    :return: True if match, else False
+    入力されたパスワードと、保存されているハッシュ化パスワードを照合する
+
+    :param plain_password: str
+        ユーザーが入力した平文パスワード
+    :param hashed_password: str
+        データベースに保存されているハッシュ化済みパスワード
+    :return: bool
+        一致する場合は True、そうでない場合は False
     """
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password):
     """
-    Hash password
+    パスワードをハッシュ化する
 
-    :param password - str: plain password
-    :return: hashed password
+    :param password: str
+        平文パスワード
+    :return: str
+        ハッシュ化されたパスワード
     """
     return pwd_context.hash(password)
 
 def create_access_token(data: dict):
     """
-    Create JWT access token
+    JWT アクセストークンを生成する
 
-    :param data - dict: data to encode in the token
-    :return: encoded JWT token
+    :param data: dict
+        トークンにエンコードするデータ
+    :return: str
+        エンコード済み JWT アクセストークン
     """
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -46,14 +53,21 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-# Hàm phụ trợ: Lấy user hiện tại từ Token (Dùng để bảo vệ API)
-def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(get_session)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    session: Session = Depends(get_session)
+):
     """
-    Get current user from JWT token
-    
-    :param token - str: JWT token from request
-    :param session - Session: DB session
-    :return: User which token belongs to
+    JWT トークンから現在の認証済みユーザーを取得する
+
+    :param token: str
+        リクエストヘッダーから取得した JWT トークン
+    :param session: Session
+        データベースセッション
+    :return: User
+        トークンに紐づくユーザーオブジェクト
+    :raises HTTPException:
+        トークンが無効、またはユーザーが存在しない場合
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -67,7 +81,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-        
+
     user = crud.get_user_by_username(session, username)
     if user is None:
         raise credentials_exception

@@ -21,9 +21,10 @@ from fastapi import FastAPI, Depends, HTTPException, status, Form, Request
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Lifespan context manager for FastAPI app
-    
-    :param app - FastAPI: app instance
+    FastAPI アプリケーションのライフサイクル管理
+
+    アプリ起動時にデータベース初期化および
+    デフォルト管理者ユーザーの作成を行う
     """
     create_db_and_tables()
     crud.create_default_admin(session=Session(engine))
@@ -35,7 +36,7 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS Middleware configuration
+# CORS 設定
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,63 +48,72 @@ app.add_middleware(
 # === API INDEX ===
 @app.get("/")
 def index():
-    return {"message": "Welcome to Login System API"}
+    return {"message": "ログインシステム API へようこそ"}
 
 # === API SEND OTP ===
 @app.post("/send-otp")
 @limiter.limit("5/minute")
 def send_otp(
     request: Request,
-    req: OTPRequest, 
+    req: OTPRequest,
     session: Session = Depends(get_session)
-): 
-    # --- Register Flow ---
+):
+    """
+    登録またはログイン用の OTP を発行する
+    """
     user = crud.get_user_by_username(session, req.username)
-    print("REQUEST", req, user, req.username)
+    print("OTPリクエスト受信:", req.username, "種別:", req.type)
+
+    # --- 登録フロー ---
     if req.type == "register":
-        # Check if user already exists
         if user:
-            raise HTTPException(status_code=400, detail="Username already exists, cannot register")
-    
-    # --- Login Flow ---
+            raise HTTPException(
+                status_code=400,
+                detail="このユーザー名は既に存在します"
+            )
+
+    # --- ログインフロー ---
     elif req.type == "login":
         if not req.password:
-            raise HTTPException(status_code=400, detail="Password is required for login OTP request")
-            
-        # Check if user exists and password matches
+            raise HTTPException(
+                status_code=400,
+                detail="ログインにはパスワードが必要です"
+            )
+
         if not user or not auth.verify_password(req.password, user.password):
-            raise HTTPException(status_code=400, detail="Invalid username or password for login OTP request")
-            
-    # --- Create and send OTP ---
+            raise HTTPException(
+                status_code=400,
+                detail="ユーザー名またはパスワードが正しくありません"
+            )
+
+    # --- OTP 作成 ---
     otp_code = str(random.randint(100000, 999999))
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
-    
-    # Invalidate any existing OTP for the user
+
+    # 既存 OTP を無効化
     existing_otp = session.get(OTP, req.username)
     if existing_otp:
         session.delete(existing_otp)
         session.commit()
-    
-    # Create new OTP record and save to DB
+
     new_otp = OTP(username=req.username, code=otp_code, expires_at=expires_at)
     session.add(new_otp)
     session.commit()
-    
-    # Simulate sending OTP via Email or return to client
+
+    # --- OTP 送信（シミュレーション） ---
     if req.email or (user and user.email):
-        # If email provided in request or user has email, "send" OTP via email (simulated Terminal print)
-        print(f"\n[MOCK EMAIL SERVER] Sending OTP to {req.email or user.email}")
-        print(f"Subject: Login Verification")
-        print(f"Body: Your OTP code is {otp_code}\n")
-        
+        print("\n[疑似メールサーバー]")
+        print(f"宛先: {req.email or user.email}")
+        print("件名: 認証コードのお知らせ")
+        print(f"本文: OTPコードは {otp_code} です\n")
+
         return {
-            "message": f"OTP sent to email {req.email}",
+            "message": "OTPをメールに送信しました",
             "otp_code": None
         }
     else:
-        # No email provided, return OTP in response (for UI display/testing)
         return {
-            "message": "OTP sent to UI",
+            "message": "OTPを画面に表示しました",
             "otp_code": otp_code
         }
 
@@ -112,24 +122,30 @@ def send_otp(
 @limiter.limit("5/minute")
 def register(
     request: Request,
-    user_in: UserCreate, 
+    user_in: UserCreate,
     session: Session = Depends(get_session)
 ):
-    # Validation password strength
+    """
+    新規ユーザー登録
+    """
     if user_in.password:
         validate_password_strength(user_in.password)
     else:
-        raise HTTPException(status_code=400, detail="Password is required")
-    
-    # Verify OTP
+        raise HTTPException(
+            status_code=400,
+            detail="パスワードは必須です"
+        )
+
     crud.verify_otp(session, user_in.username, user_in.otp)
-    
-    # Check if username already exists
+
     user = crud.get_user_by_username(session, user_in.username)
     if user:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    
-    print("Creating user:", user_in)
+        raise HTTPException(
+            status_code=400,
+            detail="このユーザー名は既に登録されています"
+        )
+
+    print("ユーザー作成:", user_in.username)
     new_user = crud.create_user(session, user_in)
     return new_user
 
@@ -138,23 +154,23 @@ def register(
 @limiter.limit("5/minute")
 def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(), 
+    form_data: OAuth2PasswordRequestForm = Depends(),
     otp: str = Form(...),
     session: Session = Depends(get_session)
 ):
-    # Verify username and password
+    """
+    ログイン処理（パスワード + OTP 認証）
+    """
     user = crud.get_user_by_username(session, form_data.username)
     if not user or not auth.verify_password(form_data.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="ユーザー名またはパスワードが正しくありません",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Verify OTP after password is correct
+
     crud.verify_otp(session, form_data.username, otp)
-    
-    # Create JWT token after successful login
+
     access_token = auth.create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -162,8 +178,7 @@ def login(
 @app.post("/refresh-token")
 def refresh_token(current_user: User = Depends(auth.get_current_user)):
     """
-    Refresh JWT access token for the current user 
-    whether token is expired or about to expire and user is still active.
+    現在のユーザーに対して JWT アクセストークンを再発行する
     """
     access_token = auth.create_access_token(data={"sub": current_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
