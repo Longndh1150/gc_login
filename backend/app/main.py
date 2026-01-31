@@ -167,6 +167,3 @@ def refresh_token(current_user: User = Depends(auth.get_current_user)):
     """
     access_token = auth.create_access_token(data={"sub": current_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
-
-if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)

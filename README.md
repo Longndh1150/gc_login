@@ -94,7 +94,7 @@
 プロジェクトのルートディレクトリで以下のコマンドを実行してください。
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 - Frontend: http://localhost:5173

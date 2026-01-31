@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # --- Service Backend ---
+  backend:
+    build: ./backend
+    container_name: gc_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Map thư mục code để sửa code xong không cần build lại (Hot Reload)
+      - ./backend:/app
+      # Map file DB ra ngoài để tắt Docker không bị mất dữ liệu
+      - ./backend_data:/app/data 
+    environment:
+      - DATABASE_URL=sqlite:///./data/database.db
+
+  # --- Service Frontend ---
+  frontend:
+    build: ./frontend
+    container_name: gc_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Map code để sửa giao diện thấy ngay (Hot Reload)
+      - ./frontend:/app
+      # Tránh map node_modules từ máy thật vào container (gây lỗi)
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
